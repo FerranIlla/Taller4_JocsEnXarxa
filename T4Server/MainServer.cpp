@@ -10,9 +10,9 @@
 #define PEERS_NUMBER 4
 
 //function to send the new Nodeinfo to all peers connected
-void sendNodeInfoToAllPeers(std::list<sf::TcpSocket*>* peerSockets, sf::SocketSelector* selector, std::string ip, std::string port) {
+void sendNodeInfoToAllPeers(std::list<sf::TcpSocket*>* sockets, sf::SocketSelector* selector, std::string ip, std::string port) {
 	std::string msj = ip + "-" + port;
-	for (std::list<sf::TcpSocket*>::iterator it = peerSockets->begin(); it != peerSockets->end(); it++) {
+	for (std::list<sf::TcpSocket*>::iterator it = sockets->begin(); it != sockets->end(); it++) {
 		sf::TcpSocket* socket = *it;
 		sf::Socket::Status status = socket->send(msj.c_str(), msj.length());
 		if (status != sf::Socket::Done) {
@@ -44,12 +44,15 @@ int main() {
 	//std::size_t bytesReceived;
 
 	//creamos una lista para guardar los sockets
-	std::list<sf::TcpSocket*> peers;
+	std::list<sf::TcpSocket*> sockets;
 
 	//escuchamos si el cliente se quiere conectar
 	sf::Socket::Status status = listener.listen(5000);
 	if (status != sf::Socket::Done) {
-
+		std::cout << "Error a listen(5000)\n";
+	}
+	else {
+		std::cout << "Puerto 5000 escuchando\n";
 	}
 
 	selector.add(listener);
@@ -63,27 +66,29 @@ int main() {
 			//miramos el listener
 			if (selector.isReady(listener)) {
 				//creamos un socket para el nuevo peer
-				sf::TcpSocket* peer = new sf::TcpSocket;
+				sf::TcpSocket* socket = new sf::TcpSocket;
 				//si el accept se hace bien
-				sf::Socket::Status status = listener.accept(*peer);
+				sf::Socket::Status status = listener.accept(*socket);
 				if (status == sf::Socket::Done) {
-					std::string ip = peer->getRemoteAddress().toString();
-					std::string port = std::to_string(peer->getRemotePort());
-					//añadimos al nuevo cliente a la lista
-					peers.push_back(peer);
-					//añadimos el cliente al selector
-					selector.add(*peer);
+					std::cout << "Cliente aceptado\n";
+					std::string ip = socket->getRemoteAddress().toString();
+					std::string port = std::to_string(socket->getRemotePort());
+					std::cout << "ip: " << ip << ", port: " << port << std::endl;
 					//avisamos de que se ha conectado y enviamos la info del nuevo nodo
 					count++;
-					sendString(peer, std::to_string(count));
-					sendNodeInfoToAllPeers(&peers, &selector, ip, port);
-					std::cout << "Cliente aceptado\n";
+					sendString(socket, std::to_string(count));
+					sendNodeInfoToAllPeers(&sockets, &selector, ip, port);
+					//añadimos al nuevo cliente a la lista
+					sockets.push_back(socket);
+					//añadimos el cliente al selector
+					selector.add(*socket);
+					
 				}
 				else {
 					std::cout << "problema al conectar el cliente\n";
 				}
 				/*else if (status == sf::Socket::Disconnected) {
-					disconnectSock(peer, &selector, &peers);
+					disconnectSock(socket, &selector, &sockets);
 				}*/
 			}
 			//else {
@@ -102,7 +107,7 @@ int main() {
 		}
 	}
 	
-	for (std::list<sf::TcpSocket*>::iterator it = peers.begin(); it != peers.end(); it++) {
+	for (std::list<sf::TcpSocket*>::iterator it = sockets.begin(); it != sockets.end(); it++) {
 		sf::TcpSocket* client = *it;
 		client->disconnect();
 		selector.remove(*client);

@@ -127,10 +127,38 @@ int main()
 				aMensajes.erase(aMensajes.begin(), aMensajes.begin() + 1);
 			}
 			mu.unlock();
-
-			if (atoi(buffer)>1) {
-				//abrir el listener para que los futuros peers se puedan conectar
+			std::cout << "Hay " + std::string(buffer) + " peers conectados.\n";
+			//crear y conectar nuevos sockets a cada peer
+			for (int i = 1; i < atoi(buffer); ++i) {
+				std::cout << "aqui nos conectariamos con otro peer\n";
+				//hacer recieve de ip+puerto de un socket desde servidor
+				char buffer[MAX_MENSAJES_SIZE];
+				std::size_t bytesReceived;
+				sf::Socket::Status status = socket.receive(&buffer, MAX_MENSAJES_SIZE, bytesReceived);
+				if (status != sf::Socket::Done) std::cout << "Error al recibir ip-port desde el servidor\n";
+				else {
+					std::string data = std::string(buffer);
+					std::cout << data << std::endl;
+					//crear socket y añadirlo a la lista
+					//conectar el socket al puerto recibido
+				}
+				
 			}
+
+			//abrir el listener para que los futuros peers se puedan conectar
+			if (atoi(buffer)<4) {
+				
+				sf::Socket::Status status = listener.listen(socket.getLocalPort());
+				if (status == sf::Socket::Done) {
+					std::cout << "Puerto local escuchando: " << socket.getLocalPort() << std::endl;
+				}
+				else {
+					std::cout << "Error a listen\n";
+				}
+				//cuando alguien se quiera conectar creamos un socket y accept
+				
+			}
+			
 			
 		}
 		else {
@@ -142,7 +170,7 @@ int main()
 	
 
 	//Codigo de display y enviar/recivir datos
-	
+	/*
 	sf::Vector2i screenDimensions(800, 600);
 
 	sf::RenderWindow window;
@@ -189,8 +217,8 @@ int main()
 						sendString(&socket, mensaje);
 						//window.close();
 						std::cout << "sale\n";
-						/*std::string msj = "Cliente desconectado\n";
-						sendString(&socket, msj);*/
+						//std::string msj = "Cliente desconectado\n";
+						//sendString(&socket, msj);
 					}
 					else {
 						//SEND
@@ -230,6 +258,9 @@ int main()
 		window.clear();
 	}
 	
+	*/
 	socket.disconnect();
+	std::cout << "socket disconnected\n";
 	//t1.join();
+	system("pause");
 }
