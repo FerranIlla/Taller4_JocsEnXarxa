@@ -13,29 +13,29 @@
 std::mutex mu;
 bool connected = false;
 
-void sendAll(std::list<sf::TcpSocket*>* clients, sf::SocketSelector* selector, std::string msj) {
-	for (std::list<sf::TcpSocket*>::iterator it = clients->begin(); it != clients->end(); it++) {
-		sf::TcpSocket* client = *it;
-		sf::Socket::Status status = client->send(msj.c_str(), msj.length());
-		if (status == sf::Socket::Disconnected) {
-			//disconnectSock(client, selector, clients);
-		}
-	}
-}
-
-void disconnectSock(sf::TcpSocket* socket, sf::SocketSelector* selector, std::list<sf::TcpSocket*>* clients) {
-	selector->remove(*socket);
-	socket->disconnect();
-	sendAll(clients, selector, "Un cliente se ha desconectado\n");
-	std::cout << "Cliente desconectado\n";
-}
-
-void sendString(sf::TcpSocket* socket, std::string msj) {
-	sf::Socket::Status status = socket->send(msj.c_str(), msj.length());
-	if (status != sf::Socket::Done) {
-		std::cout << "Error al enviar\n";
-	}
-}
+//void sendAll(std::list<sf::TcpSocket*>* clients, sf::SocketSelector* selector, std::string msj) {
+//	for (std::list<sf::TcpSocket*>::iterator it = clients->begin(); it != clients->end(); it++) {
+//		sf::TcpSocket* client = *it;
+//		sf::Socket::Status status = client->send(msj.c_str(), msj.length());
+//		if (status == sf::Socket::Disconnected) {
+//			disconnectSock(client, selector, clients);
+//		}
+//	}
+//}
+//
+//void disconnectSock(sf::TcpSocket* socket, sf::SocketSelector* selector, std::list<sf::TcpSocket*>* clients) {
+//	selector->remove(*socket);
+//	socket->disconnect();
+//	sendAll(clients, selector, "Un cliente se ha desconectado\n");
+//	std::cout << "Cliente desconectado\n";
+//}
+//
+//void sendString(sf::TcpSocket* socket, std::string msj) {
+//	sf::Socket::Status status = socket->send(msj.c_str(), msj.length());
+//	if (status != sf::Socket::Done) {
+//		std::cout << "Error al enviar\n";
+//	}
+//}
 
 void receive(sf::TcpSocket* socket, std::vector<std::string>* aMensajes) {
 	bool open = true;
@@ -90,13 +90,14 @@ void receiveBySelector(sf::SocketSelector* selector, sf::TcpSocket* socket, std:
 
 struct NodeInfo {
 	std::string ip, port;
+	NodeInfo(std::string _ip, std::string _port) :ip(_ip), port(_port) {}
 };
 
 int main()
 {
 	sf::SocketSelector selector;
 	std::list<sf::TcpSocket*> sockets;
-	NodeInfo nodesInfo[4];
+	//NodeInfo nodesInfo[4];
 	sf::TcpListener listener;
 
 	//std::thread t1;
@@ -105,13 +106,13 @@ int main()
 	//establecimiento de conexion
 	sf::TcpSocket socket;
 	sf::Socket::Status status = socket.connect(LOCALHOST, 5000, sf::seconds(5.f));
-
+	int myPort;
 	if (status != sf::Socket::Status::Done) {
 		std::cout << "Problema al establecer conexión.\n";
 	}
 	else {
 		std::cout << "Conectado con el bootstrap server\n";
-		
+		myPort = socket.getLocalPort();
 		//inicializamos el thread
 		//t1 = std::thread(&receive, &socket, &aMensajes);
 
@@ -121,14 +122,16 @@ int main()
 		sf::Socket::Status status = socket.receive(&buffer, MAX_MENSAJES_SIZE, bytesReceived);
 		if (status == sf::Socket::Status::Done) {
 			buffer[bytesReceived] = '\0';
-			mu.lock();
+			/*mu.lock();
 			aMensajes.push_back("Hay " + std::string(buffer) + " peers conectados.");
 			if (aMensajes.size() > 25) {
 				aMensajes.erase(aMensajes.begin(), aMensajes.begin() + 1);
 			}
-			mu.unlock();
+			mu.unlock();*/
 			std::cout << "Hay " + std::string(buffer) + " peers conectados.\n";
 			//crear y conectar nuevos sockets a cada peer
+			sf::IpAddress ip;
+			int port;
 			for (int i = 1; i < atoi(buffer); ++i) {
 				std::cout << "aqui nos conectariamos con otro peer\n";
 				//hacer recieve de ip+puerto de un socket desde servidor
@@ -136,38 +139,83 @@ int main()
 				std::size_t bytesReceived;
 				sf::Socket::Status status = socket.receive(&buffer, MAX_MENSAJES_SIZE, bytesReceived);
 				if (status != sf::Socket::Done) std::cout << "Error al recibir ip-port desde el servidor\n";
-				else {
-					std::string data = std::string(buffer);
-					std::cout << data << std::endl;
-					//crear socket y añadirlo a la lista
-					//conectar el socket al puerto recibido
+				ip = std::string(buffer);
+				char buffer2[MAX_MENSAJES_SIZE];
+				std::size_t bytesReceived2;
+				status = socket.receive(&buffer2, MAX_MENSAJES_SIZE, bytesReceived2);
+				if (status != sf::Socket::Done) std::cout << "Error al recibir ip-port desde el servidor\n";
+				port = atoi(buffer2);
+				std::cout << "this is the port to connect to: " << port << std::endl;
+
+				//crear socket y conectar el socket al puerto recibido
+				sf::TcpSocket *sock = new sf::TcpSocket;
+				status = sock->connect(ip, port, sf::seconds(5.f));
+				//añadirlo a la lista
+				if (status == sf::Socket::Done) {
+					sockets.push_back(sock);
+					selector.add(*sock);
+					std::cout << "Conectado a otro peer y añadido el sockert a la lista\n";
 				}
+				
 				
 			}
 
+			socket.disconnect();
+			std::cout << "socket with server disconnected\n";
 			//abrir el listener para que los futuros peers se puedan conectar
 			if (atoi(buffer)<4) {
-				
-				sf::Socket::Status status = listener.listen(socket.getLocalPort());
+				sf::Socket::Status status = listener.listen(myPort);
 				if (status == sf::Socket::Done) {
-					std::cout << "Puerto local escuchando: " << socket.getLocalPort() << std::endl;
+					std::cout << "Puerto local escuchando: " << myPort << std::endl;
+					selector.add(listener);
+					
+					/*sf::TcpSocket *sock;
+					if (listener.accept(*sock) == sf::Socket::Status::Done) {
+						sockets.push_back(sock);
+						
+					}
+					std::cout << "Socket aceptado y añadido a list. Conexion establecida" << std::endl;*/	
 				}
 				else {
 					std::cout << "Error a listen\n";
 				}
-				//cuando alguien se quiera conectar creamos un socket y accept
-				
-			}
-			
-			
+				}
 		}
 		else {
 			std::cout << "Problema al recibir el numero de peers conectados.\n";
 		}
 		
+	}
 
+	while (sockets.size() < 3) {
+		if (selector.wait()) {
+			//miramos el listener
+			if (selector.isReady(listener)) {
+				//creamos un socket para la nueva conexion
+				sf::TcpSocket *sock = new sf::TcpSocket;
+				sf::Socket::Status status = listener.accept(*sock);
+				if (status == sf::Socket::Done) {
+					//añadimos el socket a la lista
+					sockets.push_back(sock);
+					//añadimos el socket al selector
+					selector.add(*sock);
+					std::cout << "Conexion con otro peer establecida!\n";
+				}
+			}
+		}
 	}
 	
+	std::cout << "My open port is: " << sockets.front()->getLocalPort() << std::endl;
+	if (sockets.size() == 3) {
+		int count = 0;
+		for (std::list<sf::TcpSocket*>::iterator it = sockets.begin(); it != sockets.end(); it++) {
+			sf::TcpSocket* tempSock = *it;
+			count++;
+			std::cout << "Puerto del socket numero " << count << ": " << tempSock->getRemotePort() << std::endl;
+			
+		}
+	}
+	//EMPIEZA EL CHAT
 
 	//Codigo de display y enviar/recivir datos
 	/*
@@ -259,8 +307,8 @@ int main()
 	}
 	
 	*/
-	socket.disconnect();
-	std::cout << "socket disconnected\n";
+	
+	
 	//t1.join();
 	system("pause");
 }

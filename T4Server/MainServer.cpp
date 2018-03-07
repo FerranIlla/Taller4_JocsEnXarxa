@@ -10,15 +10,33 @@
 #define PEERS_NUMBER 4
 
 //function to send the new Nodeinfo to all peers connected
-void sendNodeInfoToAllPeers(std::list<sf::TcpSocket*>* sockets, sf::SocketSelector* selector, std::string ip, std::string port) {
-	std::string msj = ip + "-" + port;
-	for (std::list<sf::TcpSocket*>::iterator it = sockets->begin(); it != sockets->end(); it++) {
-		sf::TcpSocket* socket = *it;
-		sf::Socket::Status status = socket->send(msj.c_str(), msj.length());
-		if (status != sf::Socket::Done) {
-			std::cout << "Error al enviar\n";
-		}
+//void sendNodeInfoToAllPeers(std::list<sf::TcpSocket*>* sockets, sf::SocketSelector* selector, std::string ip, std::string port) {
+//	std::string msj = ip + "-" + port;
+//	for (std::list<sf::TcpSocket*>::iterator it = sockets->begin(); it != sockets->end(); it++) {
+//		sf::TcpSocket* socket = *it;
+//		sf::Socket::Status status = socket->send(msj.c_str(), msj.length());
+//		if (status != sf::Socket::Done) {
+//			std::cout << "Error al enviar\n";
+//		}
+//	}
+//}
+
+struct NodeInfo {
+	std::string ip, port;
+	NodeInfo(std::string _ip, std::string _port) :ip(_ip), port(_port) {}
+};
+
+void sendNodesInfo(sf::TcpSocket* socket, std::list<NodeInfo> nodesInfo) {
+	int count = 0;
+	for (std::list<NodeInfo>::iterator it = nodesInfo.begin(); it != nodesInfo.end(); it++) {
+		count++;
+		NodeInfo ni = *it;
+		sf::Socket::Status status = socket->send(ni.ip.c_str(), ni.ip.length());
+		if (status != sf::Socket::Done) std::cout << "Error al enviar la ip del socket " << count << std::endl;
+		status = socket->send(ni.port.c_str(), ni.port.length());
+		if (status != sf::Socket::Done) std::cout << "Error al enviar el puerto del socket " << count << std::endl;
 	}
+	std::cout << "Enviada la info de " << count << " peers!\n";
 }
 
 void sendString(sf::TcpSocket* socket, std::string msj) {
@@ -35,6 +53,7 @@ void sendString(sf::TcpSocket* socket, std::string msj) {
 //}
 
 
+
 int main() {
 	
 	sf::TcpListener listener;
@@ -43,8 +62,8 @@ int main() {
 	//char buffer[MAX_MSJ_SIZE];
 	//std::size_t bytesReceived;
 
-	//creamos una lista para guardar los sockets
-	std::list<sf::TcpSocket*> sockets;
+	//creamos una lista para guardar el ip:port de cada peer
+	std::list<NodeInfo> nodesInfo;
 
 	//escuchamos si el cliente se quiere conectar
 	sf::Socket::Status status = listener.listen(5000);
@@ -71,16 +90,17 @@ int main() {
 				sf::Socket::Status status = listener.accept(*socket);
 				if (status == sf::Socket::Done) {
 					std::cout << "Cliente aceptado\n";
-					std::string ip = socket->getRemoteAddress().toString();
-					std::string port = std::to_string(socket->getRemotePort());
-					std::cout << "ip: " << ip << ", port: " << port << std::endl;
-					//avisamos de que se ha conectado y enviamos la info del nuevo nodo
+					//avisamos cuantos peers se han conectado
 					count++;
 					sendString(socket, std::to_string(count));
-					sendNodeInfoToAllPeers(&sockets, &selector, ip, port);
-					//añadimos al nuevo cliente a la lista
-					sockets.push_back(socket);
-					//añadimos el cliente al selector
+					//enviamos la info de los otros peers(si la hay) a la ultima conexion
+					sendNodesInfo(socket, nodesInfo);
+					std::string ip = socket->getRemoteAddress().toString();
+					std::string port = std::to_string(socket->getRemotePort());
+					nodesInfo.push_back(NodeInfo(ip, port));
+					std::cout << "El cliente tiene ip: " << ip << " y port: " << port << std::endl;
+					
+					//añadimos el cliente al selector --------------------------hace falta??-----------------------------------
 					selector.add(*socket);
 					
 				}
@@ -107,10 +127,10 @@ int main() {
 		}
 	}
 	
-	for (std::list<sf::TcpSocket*>::iterator it = sockets.begin(); it != sockets.end(); it++) {
+	/*for (std::list<sf::TcpSocket*>::iterator it = sockets.begin(); it != sockets.end(); it++) {
 		sf::TcpSocket* client = *it;
 		client->disconnect();
 		selector.remove(*client);
-	}
+	}*/
 	listener.close();
 }
